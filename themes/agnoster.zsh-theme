@@ -89,7 +89,8 @@ prompt_end() {
 # Context: user@hostname (who am I and where am I)
 prompt_context() {
   if [[ "$USERNAME" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
-    prompt_segment black default "%(!.%{%F{yellow}%}.)%n@%m"
+    #prompt_segment black default "%(!.%{%F{yellow}%}.)%n@%m"
+    prompt_segment black default "%(!.%{%F{yellow}%}.)%n@%m$USERNAME"
   fi
 }
 
@@ -221,10 +222,10 @@ prompt_virtualenv() {
 # - are there background jobs?
 prompt_status() {
   local -a symbols
-
-  [[ $RETVAL -ne 0 ]] && symbols+="%{%F{red}%}✘"
+  symbols=()
+  [[ $RETVAL -ne 0 ]] && symbols+="%{%F{red}%}✘ $RETVAL"
   [[ $UID -eq 0 ]] && symbols+="%{%F{yellow}%}⚡"
-  [[ $(jobs -l | wc -l) -gt 0 ]] && symbols+="%{%F{cyan}%}⚙"
+  [[ $(jobs -l | wc -l) -gt 0 ]] && symbols+="$?%{%F{cyan}%}⚙"
 
   [[ -n "$symbols" ]] && prompt_segment black default "$symbols"
 }
@@ -257,3 +258,52 @@ build_prompt() {
 }
 
 PROMPT='%{%f%b%k%}$(build_prompt) '
+
+###############################################################################
+# Right prompt
+###############################################################################
+CURRENT_BG='NONE'
+PRIMARY_FG=black
+# Characters
+SEGMENT_SEPARATOR="\ue0b0"
+RSEGMENT_SEPARATOR="\ue0b2"
+
+# Begin an RPROMPT segment
+# Takes two arguments, background and foreground. Both can be omitted,
+# rendering default background/foreground.
+rprompt_segment() {
+  local bg fg
+  [[ -n $1 ]] && bg="%K{$1}" || bg="%k"
+  [[ -n $2 ]] && fg="%F{$2}" || fg="%f"
+  if [[ $CURRENT_BG != 'NONE' && $1 != $CURRENT_BG ]]; then
+    echo -n " %{%K{$CURRENT_BG}%F{$1}%}$RSEGMENT_SEPARATOR%{$bg%}%{$fg%} "
+  else
+    echo -n "%F{$1}%{%K{default}%}$RSEGMENT_SEPARATOR%{$bg%}%{$fg%} "
+  fi
+  CURRENT_BG=$1
+  [[ -n $3 ]] && echo -n $3
+}
+
+# Timestamp: add a timestamp to prompt - real time clock, stops when command is executed
+prompt_timestamp() {
+  if [[ $ZSH_TIME = "24" ]]; then
+    local time_string="%H:%M:%S"
+  else
+    local time_string="%L:%M"
+  fi
+  rprompt_segment blue $PRIMARY_FG "%D{$time_string}"
+}
+
+## Right prompt
+build_right_prompt() {
+  prompt_timestamp
+  echo -n " " # rprompt looks awful without a space at the end
+}
+
+# Needed for clock in prompt
+TMOUT=1
+TRAPALRM() {
+    zle reset-prompt
+}
+
+RPROMPT='%{%f%b%k%}$(build_right_prompt)'
